@@ -1,0 +1,285 @@
+<html><head><base href="https://websim.example.com/iris-analysis/">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Iris Dataset Analysis</title>
+<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    display: flex;
+  }
+  #sidebar {
+    width: 200px;
+    background-color: #f0f0f0;
+    padding: 20px;
+    height: 100vh;
+    overflow-y: auto;
+  }
+  #main-content {
+    flex-grow: 1;
+    padding: 20px;
+    overflow-y: auto;
+  }
+  h1, h2 {
+    color: #333;
+  }
+  button {
+    display: block;
+    width: 100%;
+    padding: 10px;
+    margin-bottom: 10px;
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    cursor: pointer;
+  }
+  button:hover {
+    background-color: #45a049;
+  }
+  #visualization {
+    width: 100%;
+    height: 800px;
+  }
+  .feature-select {
+    margin-bottom: 10px;
+  }
+  label {
+    display: block;
+    margin-bottom: 5px;
+  }
+  select {
+    width: 100%;
+    padding: 5px;
+  }
+</style>
+</head>
+<body>
+  <div id="sidebar">
+    <h2>Visualization Options</h2>
+    <div id="feature-selectors">
+      <div class="feature-select">
+        <label for="x-axis">X-axis:</label>
+        <select id="x-axis"></select>
+      </div>
+      <div class="feature-select">
+        <label for="y-axis">Y-axis:</label>
+        <select id="y-axis"></select>
+      </div>
+    </div>
+    <button id="update-graph">Update Graph</button>
+    <button id="pairplot-btn">Show Pairplot</button>
+    <button id="heatmap-btn">Show Accuracy Heatmap</button>
+  </div>
+  <div id="main-content">
+    <h1>Iris Dataset Analysis</h1>
+    <div id="visualization"></div>
+  </div>
+
+  <script>
+    const irisData = [];
+    const features = ['sepal_length', 'sepal_width', 'petal_length', 'petal_width'];
+    const species = ['setosa', 'versicolor', 'virginica'];
+    const colors = ['#1f77b4', '#ff7f0e', '#2ca02c'];
+
+    // Load and parse the Iris dataset
+    Papa.parse('https://raw.githubusercontent.com/mwaskom/seaborn-data/master/iris.csv', {
+      download: true,
+      header: true,
+      complete: function(results) {
+        irisData.push(...results.data);
+        populateFeatureSelectors();
+        createVisualization();
+      }
+    });
+
+    function populateFeatureSelectors() {
+      const xAxis = document.getElementById('x-axis');
+      const yAxis = document.getElementById('y-axis');
+      
+      features.forEach(feature => {
+        xAxis.appendChild(new Option(feature, feature));
+        yAxis.appendChild(new Option(feature, feature));
+      });
+
+      // Set default selections
+      xAxis.value = 'sepal_length';
+      yAxis.value = 'sepal_width';
+    }
+
+    function createVisualization() {
+      const xFeature = document.getElementById('x-axis').value;
+      const yFeature = document.getElementById('y-axis').value;
+
+      if (xFeature === yFeature) {
+        createHistogram(xFeature);
+      } else {
+        createScatterplot(xFeature, yFeature);
+      }
+    }
+
+    function createScatterplot(xFeature, yFeature) {
+      const traces = species.map((s, i) => ({
+        x: irisData.filter(d => d.species === s).map(d => d[xFeature]),
+        y: irisData.filter(d => d.species === s).map(d => d[yFeature]),
+        mode: 'markers',
+        type: 'scatter',
+        name: s,
+        marker: { size: 8, color: colors[i] }
+      }));
+
+      const layout = {
+        title: 'Iris Dataset Scatterplot',
+        xaxis: { title: xFeature },
+        yaxis: { title: yFeature },
+        height: 600,
+        width: 800,
+        autosize: true
+      };
+
+      Plotly.newPlot('visualization', traces, layout);
+    }
+
+    function createHistogram(feature) {
+      const data = species.map(s => ({
+        x: irisData.filter(d => d.species === s).map(d => d[feature]),
+        type: 'histogram',
+        name: s,
+        opacity: 0.7,
+        marker: {
+          color: colors[species.indexOf(s)]
+        },
+      }));
+
+      const layout = {
+        title: `Distribution of ${feature} by Species`,
+        xaxis: { title: feature },
+        yaxis: { title: 'Count' },
+        barmode: 'overlay',
+        height: 600,
+        width: 800,
+        autosize: true
+      };
+
+      Plotly.newPlot('visualization', data, layout);
+    }
+
+    function createPairplot() {
+      const traces = [];
+      const rows = features.length;
+      const cols = features.length;
+
+      const layout = {
+        title: 'Iris Dataset Pairplot',
+        grid: {rows: rows, columns: cols, pattern: 'independent'},
+        height: 800,
+        width: 800,
+        autosize: true,
+        showlegend: true,
+        legend: {
+          x: 1,
+          y: 0.5,
+          xanchor: 'right',
+          yanchor: 'middle'
+        }
+      };
+
+      for (let i = 0; i < rows; i++) {
+        for (let j = 0; j < cols; j++) {
+          const xFeature = features[j];
+          const yFeature = features[i];
+
+          if (i === j) {
+            // Histogram on diagonal
+            species.forEach((s, speciesIndex) => {
+              traces.push({
+                x: irisData.filter(d => d.species === s).map(d => d[xFeature]),
+                type: 'histogram',
+                name: s,
+                opacity: 0.7,
+                marker: { color: colors[speciesIndex] },
+                xaxis: `x${i * cols + j + 1}`,
+                yaxis: `y${i * cols + j + 1}`,
+                showlegend: i === 0 && j === 0
+              });
+            });
+          } else {
+            // Scatterplot on off-diagonal
+            species.forEach((s, speciesIndex) => {
+              traces.push({
+                x: irisData.filter(d => d.species === s).map(d => d[xFeature]),
+                y: irisData.filter(d => d.species === s).map(d => d[yFeature]),
+                mode: 'markers',
+                type: 'scatter',
+                name: s,
+                marker: { size: 5, color: colors[speciesIndex] },
+                xaxis: `x${i * cols + j + 1}`,
+                yaxis: `y${i * cols + j + 1}`,
+                showlegend: false
+              });
+            });
+          }
+
+          layout[`xaxis${i * cols + j + 1}`] = {
+            title: i === rows - 1 ? xFeature : '',
+            showticklabels: i === rows - 1,
+            domain: [(j / cols), ((j + 1) / cols)]
+          };
+          layout[`yaxis${i * cols + j + 1}`] = {
+            title: j === 0 ? yFeature : '',
+            showticklabels: j === 0,
+            domain: [1 - ((i + 1) / rows), 1 - (i / rows)]
+          };
+        }
+      }
+
+      Plotly.newPlot('visualization', traces, layout);
+    }
+
+    function createAccuracyHeatmap() {
+      // Simulate accuracy data (replace with actual machine learning results)
+      const accuracyData = [];
+      for (let i = 0; i < features.length; i++) {
+        for (let j = 0; j < features.length; j++) {
+          if (i !== j) {
+            accuracyData.push({
+              x: features[i],
+              y: features[j],
+              accuracy: Math.random() * 0.5 + 0.5 // Random accuracy between 0.5 and 1
+            });
+          }
+        }
+      }
+
+      const trace = {
+        x: accuracyData.map(d => d.x),
+        y: accuracyData.map(d => d.y),
+        z: accuracyData.map(d => d.accuracy),
+        type: 'heatmap',
+        colorscale: 'Viridis'
+      };
+
+      const layout = {
+        title: 'Decision Tree Classifier Accuracy Heatmap',
+        xaxis: {title: 'Feature 1'},
+        yaxis: {title: 'Feature 2'},
+        height: 600,
+        width: 800,
+        autosize: true
+      };
+
+      Plotly.newPlot('visualization', [trace], layout);
+    }
+
+    document.getElementById('update-graph').addEventListener('click', createVisualization);
+    document.getElementById('pairplot-btn').addEventListener('click', createPairplot);
+    document.getElementById('heatmap-btn').addEventListener('click', createAccuracyHeatmap);
+
+    // Update graph when feature selectors change
+    document.getElementById('x-axis').addEventListener('change', createVisualization);
+    document.getElementById('y-axis').addEventListener('change', createVisualization);
+  </script>
+</body>
+</html>
